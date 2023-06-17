@@ -1,0 +1,54 @@
+class BlendingEnsemble():
+    def __init__(self, alpha=0.1, alpha_r=0.1, degree=1):
+        self.models = []
+        self.blender = None
+        self.alpha = alpha
+        self.alpha_r = alpha_r
+        self.degree = degree
+
+    def get_models(self):
+        models = []
+        models.append(('Lasso', Lasso(alpha = self.alpha)))
+        models.append(('Ridge', Ridge(alpha = self.alpha_r)))
+        models.append(('Poly', make_pipeline(PolynomialFeatures(degree = self.degree),LinearRegression())))
+        return models
+
+    def fit(self, X_train, y_train):
+        self.models = self.get_models()
+
+        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.33, random_state=1)
+
+        meta_X = []
+        for name, model in self.models:            
+            model.fit(X_train, y_train)
+            yhat = model.predict(X_val)
+            yhat = yhat.reshape(-1, 1)
+            meta_X.append(yhat)
+            
+        meta_X = np.hstack(meta_X)
+
+        blender = make_pipeline(PolynomialFeatures(),LinearRegression())
+
+        blender.fit(meta_X, y_val)
+        self.blender = blender
+
+        return self.blender
+
+    def predict(self, X_test):
+        meta_X = []
+        for _, model in self.models:
+            yhat = model.predict(X_test)
+            yhat = yhat.reshape(-1, 1)
+            meta_X.append(yhat)
+
+        meta_X = np.hstack(meta_X)
+
+        return self.blender.predict(meta_X)
+
+    def evaluate_r2(self, y_true, y_pred):
+        return r2_score(y_true, y_pred)
+
+    def evaluate_rmse(self, y_true, y_pred):
+        return np.sqrt(mean_squared_error(y_true, y_pred))
+    def __call__(self, X):
+        return self.predict(X)
